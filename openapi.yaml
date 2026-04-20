@@ -1,0 +1,263 @@
+openapi: 3.1.0
+info:
+  title: Maelstrom Gate Server
+  version: 0.1.0
+  description: >
+    HTTP API for Maelstrom Gate — runtime governance for AI tool access.
+    Implements the Gate spec: execution classes, mode-based suppression,
+    ingress validation, and authorization envelopes.
+
+servers:
+  - url: http://localhost:8090
+    description: Local development
+
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Health check
+      responses:
+        "200":
+          description: Server status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  tools: { type: integer, example: 5 }
+
+  /v1/tools:
+    post:
+      operationId: registerTools
+      summary: Register tools in the gate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tools]
+              properties:
+                tools:
+                  type: array
+                  items: { $ref: "#/components/schemas/Tool" }
+      responses:
+        "200":
+          description: Tools registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  registered: { type: integer }
+    get:
+      operationId: listTools
+      summary: List all registered tools
+      responses:
+        "200":
+          description: Tool list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tools:
+                    type: array
+                    items: { $ref: "#/components/schemas/Tool" }
+
+  /v1/filter:
+    post:
+      operationId: filter
+      summary: Filter tools by mode signal
+      description: >
+        Applies mode-based suppression to all registered tools.
+        Returns visible and suppressed tool lists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  type: number
+                  minimum: 0.0
+                  maximum: 1.0
+                  description: Threat mode signal
+      responses:
+        "200":
+          description: Filter result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FilterResult" }
+
+  /v1/validate:
+    post:
+      operationId: validate
+      summary: Validate a tool proposal
+      description: >
+        Checks if a tool request from the model should be accepted
+        at the current mode. Implements ingress validation (spec Section 9).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tool_name, mode]
+              properties:
+                tool_name: { type: string }
+                mode: { type: number, minimum: 0.0, maximum: 1.0 }
+      responses:
+        "200":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean, example: true }
+        "403":
+          description: Suppressed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean, example: false }
+                  reason: { type: string, example: execution_class_suppressed }
+        "404":
+          description: Tool not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean, example: false }
+                  reason: { type: string, example: tool_not_found }
+
+  /v1/envelope:
+    post:
+      operationId: buildEnvelope
+      summary: Build a signed authorization envelope
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tool_name, context_id, mode]
+              properties:
+                tool_name: { type: string }
+                context_id: { type: string }
+                mode: { type: number, minimum: 0.0, maximum: 1.0 }
+      responses:
+        "200":
+          description: Signed envelope
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /v1/envelope/verify:
+    post:
+      operationId: verifyEnvelope
+      summary: Verify an envelope signature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [envelope]
+              properties:
+                envelope: { $ref: "#/components/schemas/Envelope" }
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid: { type: boolean }
+
+  /v1/thresholds:
+    put:
+      operationId: setThresholds
+      summary: Override suppression thresholds at runtime
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: number
+                nullable: true
+              example:
+                high_impact: 0.20
+                external_action: 0.50
+      responses:
+        "200":
+          description: Thresholds updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: boolean }
+                  thresholds: { type: object }
+
+components:
+  schemas:
+    Tool:
+      type: object
+      required: [name, execution_class]
+      properties:
+        name: { type: string, example: deploy }
+        execution_class:
+          type: string
+          enum: [read_only, advisory, external_action, state_mutation, high_impact]
+        description: { type: string }
+        inputs:
+          type: object
+          additionalProperties: { type: string }
+
+    FilterResult:
+      type: object
+      properties:
+        visible:
+          type: array
+          items: { $ref: "#/components/schemas/Tool" }
+        suppressed:
+          type: array
+          items: { $ref: "#/components/schemas/Tool" }
+        mode: { type: number }
+        mode_zone:
+          type: string
+          enum: [normal, elevated, crisis]
+        thresholds: { type: object }
+
+    Envelope:
+      type: object
+      properties:
+        envelope_id: { type: string }
+        context_id: { type: string }
+        tool_name: { type: string }
+        allowed_tools:
+          type: array
+          items: { type: string }
+        max_tool_calls: { type: integer }
+        max_retries: { type: integer }
+        budget_seconds: { type: integer }
+        execution_mode:
+          type: string
+          enum: [standard, cautious, minimal]
+        dry_run: { type: boolean }
+        branching:
+          type: string
+          enum: [auto, deny]
+        human_approved: { type: boolean }
+        signature: { type: string }
