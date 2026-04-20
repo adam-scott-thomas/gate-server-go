@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/adam-scott-thomas/gate-server-go/internal/gate"
 )
@@ -23,6 +24,7 @@ type Envelope struct {
 	DryRun        bool     `json:"dry_run"`
 	Branching     string   `json:"branching"`
 	HumanApproved bool     `json:"human_approved"`
+	CreatedAt     float64  `json:"created_at"` // Unix timestamp, signed to prevent replay
 	Signature     string   `json:"signature"`
 }
 
@@ -60,6 +62,7 @@ func Build(toolName string, contextID string, mode float64, signingKey string) E
 		DryRun:        false,
 		Branching:     branching,
 		HumanApproved: false,
+		CreatedAt:     float64(time.Now().UnixNano()) / 1e9,
 	}
 
 	env.Signature = sign(env, signingKey)
@@ -83,8 +86,9 @@ func sign(env Envelope, key string) string {
 		"execution_mode": env.ExecutionMode,
 		"branching":      env.Branching,
 		"human_approved": env.HumanApproved,
+		"created_at":     env.CreatedAt,
 	}
-	data, _ := json.Marshal(canonical) // sorted keys by default in Go
+	data, _ := json.Marshal(canonical) // Go marshals map[string]any with keys sorted alphabetically
 	hash := sha256.Sum256(data)
 	mac := hmac.New(sha256.New, []byte(key))
 	mac.Write(hash[:])
