@@ -24,7 +24,7 @@ type Envelope struct {
 	DryRun        bool     `json:"dry_run"`
 	Branching     string   `json:"branching"`
 	HumanApproved bool     `json:"human_approved"`
-	CreatedAt     float64  `json:"created_at"` // Unix timestamp, signed to prevent replay
+	CreatedAt     int64    `json:"created_at"` // Unix microseconds (time.Now().UnixMicro()), signed for replay prevention.
 	Signature     string   `json:"signature"`
 }
 
@@ -62,7 +62,7 @@ func Build(toolName string, contextID string, mode float64, signingKey string) E
 		DryRun:        false,
 		Branching:     branching,
 		HumanApproved: false,
-		CreatedAt:     float64(time.Now().UnixNano()) / 1e9,
+		CreatedAt:     time.Now().UnixMicro(),
 	}
 
 	env.Signature = sign(env, signingKey)
