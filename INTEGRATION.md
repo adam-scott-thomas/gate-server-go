@@ -1,6 +1,6 @@
 # gate-server-go — Integration Intent
 
-How gate-server-go connects to the Maelstrom Gate ecosystem.
+How gate-server-go connects to the Gatekeeper ecosystem.
 
 ## Dependency Direction
 

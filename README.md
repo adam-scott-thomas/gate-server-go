@@ -69,13 +69,13 @@ go test ./...
 
 ## Parity
 
-- Threshold defaults match `maelstrom-gate` SPEC.md §5
+- Threshold defaults match `gate-keeper` SPEC.md §5
 - Envelope signatures verify cross-language (tested by `gate-test`'s
   cross-language conformance vectors)
 
 ## How it fits
 
-Layer 1 (transport) in [Maelstrom Gate](https://github.com/adam-scott-thomas/maelstrom-gate).
+Layer 1 (transport) in [Gatekeeper](https://github.com/adam-scott-thomas/gate-keeper).
 Swap `gate-server` for `gate-server-go` behind the same URL and every client
 keeps working.
 
